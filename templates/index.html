@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Music Recommendation</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: auto;
+        padding: 2em;
+        background-color: #f9f9f9;
+      }
+      textarea,
+      input {
+        width: 100%;
+        padding: 0.8em;
+        font-size: 1em;
+        margin-top: 0.5em;
+        margin-bottom: 1em;
+      }
+      button {
+        padding: 0.5em 1.5em;
+        font-size: 1em;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        cursor: pointer;
+        border-radius: 4px;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      ul {
+        margin-top: 2em;
+      }
+      li {
+        background-color: white;
+        margin-bottom: 0.5em;
+        padding: 0.75em;
+        border-radius: 4px;
+        box-shadow: 0 0 4px rgba(0, 0, 0, 0.1);
+        list-style-type: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🎧 Music Recommender</h1>
+    <p>Paste a list of songs (one per line):</p>
+    <textarea
+      id="playlist"
+      placeholder="Let Her Go&#10;Stay&#10;Shape of You"
+      rows="8"
+    ></textarea>
+
+    <label>Number of Recommendations:</label>
+    <input type="number" id="numRecommendations" value="10" min="1" max="50" />
+
+    <label>Minimum Popularity:</label>
+    <input type="number" id="minPopularity" value="85" min="0" max="100" />
+
+    <button onclick="getRecommendations()">Get Recommendations</button>
+
+    <h2>Recommended Songs:</h2>
+    <ul id="results"></ul>
+
+    <h2>Evaluation Metrics:</h2>
+    <ul id="metrics"></ul>
+
+    <script>
+      function getRecommendations() {
+        const playlist = document
+          .getElementById("playlist")
+          .value.trim()
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const n = parseInt(document.getElementById("numRecommendations").value);
+        const min_pop = parseInt(
+          document.getElementById("minPopularity").value
+        );
+
+        fetch("/recommend", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            songs: playlist,
+            n: n,
+            min_popularity: min_pop,
+          }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            const list = document.getElementById("results");
+            const metricList = document.getElementById("metrics");
+            list.innerHTML = "";
+            metricList.innerHTML = "";
+
+            if (data.error) {
+              list.innerHTML = `<li>${data.error}</li>`;
+              return;
+            }
+
+            data.recommendations.forEach((song) => {
+              const li = document.createElement("li");
+              li.textContent = `${song.track_name} – ${song.track_artist} (Popularity: ${song.track_popularity})`;
+              list.appendChild(li);
+            });
+
+            const metrics = data.metrics;
+            for (let key in metrics) {
+              const li = document.createElement("li");
+              let label = key.replace(/_/g, " ");
+              let value = metrics[key];
+
+              // Format as percentage for specific metrics
+              if (key === "genre_coverage" || key === "artist_repeat_rate") {
+                value = value.toFixed(1) + "%";
+              }
+
+              li.textContent = `${label}: ${value}`;
+              metricList.appendChild(li);
+            }
+          })
+          .catch((err) => {
+            console.error(err);
+            alert("Failed to fetch recommendations.");
+          });
+      }
+    </script>
+  </body>
+</html>
