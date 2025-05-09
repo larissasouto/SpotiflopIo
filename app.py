@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import pandas as pd
 import numpy as np
@@ -7,10 +7,7 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import cosine_similarity
 from collections import Counter
-from flask import render_template
-
-
-
+import os
 
 # Load dataset
 df = pd.read_csv("spotify_songs.csv")
@@ -31,6 +28,34 @@ X_scaled = scaler.fit_transform(X_selected)
 
 kmeans = KMeans(n_clusters=10, random_state=42)
 df_clean['cluster'] = kmeans.fit_predict(X_scaled)
+
+# Flask setup
+app = Flask(__name__)
+CORS(app)
+
+@app.route("/")
+def home():
+    return render_template("index.html")
+
+@app.route("/recommend", methods=["POST"])
+def recommend():
+    data = request.get_json()
+    song_list = data.get("songs", [])
+    n = int(data.get("n", 10))
+    min_pop = int(data.get("min_popularity", 85))
+
+    results, metrics = playlist_multi_cluster_recommendation(
+        song_list, df_clean, selected_features, kmeans, scaler,
+        n_recommendations=n, min_popularity=min_pop
+    )
+
+    if results.empty:
+        return jsonify({"error": "No valid recommendation found."}), 400
+
+    return jsonify({
+        "recommendations": results.to_dict(orient="records"),
+        "metrics": metrics
+    })
 
 # Recommendation function
 def playlist_multi_cluster_recommendation(song_list, df, features, kmeans, scaler,
@@ -112,36 +137,7 @@ def playlist_multi_cluster_recommendation(song_list, df, features, kmeans, scale
 
     return rec_df.reset_index(drop=True).head(n_recommendations), metrics
 
-
-# Flask setup
-app = Flask(__name__)
-CORS(app)
-
-
-@app.route("/")
-def home():
-    return render_template("index.html")
-
-
-@app.route("/recommend", methods=["POST"])
-def recommend():
-    data = request.get_json()
-    song_list = data.get("songs", [])
-    n = int(data.get("n", 10))
-    min_pop = int(data.get("min_popularity", 85))
-
-    results, metrics = playlist_multi_cluster_recommendation(
-        song_list, df_clean, selected_features, kmeans, scaler,
-        n_recommendations=n, min_popularity=min_pop
-    )
-
-    if results.empty:
-        return jsonify({"error": "No valid recommendation found."}), 400
-
-    return jsonify({
-        "recommendations": results.to_dict(orient="records"),
-        "metrics": metrics
-    })
-
+# Run app on correct host/port for Render
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
